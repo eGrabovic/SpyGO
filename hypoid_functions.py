@@ -12,6 +12,8 @@ from hypoid import *
 from hypoid_utils import *
 import screwCalculus as sc
 
+""" Note: after completing the packages consider merging "hypoid_functions" with "hypoid_utils" """
+
 
 def approxToolIdentification_casadi(data, member, RHO = None):
 
@@ -53,11 +55,11 @@ def approxToolIdentification_casadi(data, member, RHO = None):
         data[cutterFieldName][f'{subCutterFieldName}RHO'] = RHO
 
     if (hand.lower() == 'right' and member.lower() == 'gear') or (hand.lower() == 'left' and member.lower() == 'pinion'):
-        Tng = lambda phi2: sc.TrotZ(phi2)@sc.Ttz(-pitchapex)@sc.TrotY(delta*pi/180)@sc.Ttz(Rm)@sc.TrotX(betam*pi/180)
+        Tng = lambda phi2: sc.TrotZ(phi2)@sc.TtZ(-pitchapex)@sc.TrotY(delta*pi/180)@sc.TtZ(Rm)@sc.TrotX(betam*pi/180)
         signThick = +1
         rotguess = 2*pi/nT
     else:
-        Tng = lambda phi2: sc.TrotZ(phi2)@sc.Ttz(-pitchapex)@sc.TrotY(delta*pi/180)@sc.Ttz(Rm)@sc.TrotX(-betam*pi/180)
+        Tng = lambda phi2: sc.TrotZ(phi2)@sc.TtZ(-pitchapex)@sc.TrotY(delta*pi/180)@sc.TtZ(Rm)@sc.TrotX(-betam*pi/180)
         signThick = -1
         rotguess = -2*pi/nT
 
@@ -73,26 +75,29 @@ def approxToolIdentification_casadi(data, member, RHO = None):
     machineParMatrix = cMat*sMat*machinePar
 
     # Kinematic computation
-    ggt, Vgt, _ = machine_kinematics(machineParMatrix)
+    ggt, Vgt, Vgt_spatial = machine_kinematics(machineParMatrix)
 
     triplet = initial_guess_from_data(data, member, 'convex')
-    csiguessCVX = mmn*1.5
+    csiguessCVX = mmn*2
     thetaguessCVX = triplet[1]
     phiguessCVX = triplet[2]
     triplet = initial_guess_from_data(data, member, 'concave')
-    csiguessCNV = mmn*1.5
+    csiguessCNV = mmn*2
     thetaguessCNV = triplet[1]
     phiguessCNV = triplet[2]
 
-    x0 = [rc0 - t, pressAngCvx*1.2, pressAngCnv*1.2, csiguessCNV, thetaguessCNV, csiguessCVX, thetaguessCVX, csiguessCNV, thetaguessCNV, csiguessCVX, thetaguessCVX,\
-    rotguess, phiguessCNV, phiguessCVX, phiguessCNV, phiguessCVX, rc0 + t]
-    csiLow = mmn/300
-    csiMax = mmn*20
-    lb = [x0[0]-2*t, x0[1] - 10, x0[2] - 10, csiLow, x0[4] - pi, csiLow, x0[6] - pi, csiLow, x0[8] - pi, csiLow, x0[10] - pi, x0[11] - pi, x0[12] - pi, x0[13] - pi, x0[14] - pi/2, x0[15] - pi/2, x0[16]-5*t]
-    ub = [x0[0]+2*t, x0[1] + 10, x0[2] + 10, x0[3] + csiMax, x0[4] + pi, x0[5] + csiMax , x0[6] + pi, x0[7] + csiMax, x0[9] + pi, x0[9] + csiMax, x0[10] + pi, x0[11] + pi, x0[12] + pi, x0[13] + pi, x0[14] + pi/2, x0[15] + pi/2, x0[16]+5*t]
+    x0 = [rc0-t, pressAngCvx, pressAngCnv, csiguessCNV, thetaguessCNV, csiguessCVX, thetaguessCVX, csiguessCNV, thetaguessCNV, csiguessCVX, thetaguessCVX,\
+    rotguess, phiguessCNV, phiguessCVX, phiguessCNV, phiguessCVX, rc0+t]
+    csiLow = mmn*0.1
+    csiMax = mmn
+    lb = [x0[0]-rc0/4, x0[1] - 10, x0[2] - 10, csiLow, x0[4] - pi/2, csiLow, x0[6] - pi/2, csiLow, x0[8] - pi/2, csiLow, x0[10] - pi/2, x0[11] - 5*pi/nT, x0[12] - pi/2, x0[13] - pi/2, x0[14] - pi/2, x0[15] - pi/2, x0[16]-rc0/4]
+    ub = [x0[0]+rc0/4, x0[1] + 10, x0[2] + 10, x0[3] + csiMax, x0[4] + pi/2, x0[5] + csiMax , x0[6] + pi/2, x0[7] + csiMax, x0[8] + pi/2, x0[9] + csiMax, x0[10] + pi/2, x0[11] + 5*pi/nT, x0[12] + pi/2, x0[13] + pi/2, x0[14] + pi/2, x0[15] + pi/2, x0[16]+rc0/4]
+    lb = np.array(lb)
+    ub = np.array(ub)
+    x0 = np.array(x0)
 
-    x = ca.SX.sym('x', 17, 1)
-    x = x * (ub - lb) + lb
+    x_unscaled = ca.SX.sym('x', 17+3*4+3*4, 1)
+    x = x_unscaled * (ub - lb) + lb
     Rpcvx = x[0]
     alphacvx = x[1]
     alphacnv = x[2]
@@ -110,17 +115,25 @@ def approxToolIdentification_casadi(data, member, RHO = None):
     phiEnvI = x[14]
     phiEnvO = x[15]
     Rpcnv = x[16]
+    pO = x[17:20]
+    pI = x[20:23]
+    pOp = x[23:26]
+    pIp = x[26:29]
+    nO = x[17:20]
+    nI = x[20:23]
+    nOp = x[23:26]
+    nIp = x[26:29]
 
     toolO, toolNO = parametric_tool_casadi('convex', Rpcvx, RHO, alphacvx, edgeRadius, csiO, thetaO)
     toolI, toolNI = parametric_tool_casadi('concave', Rpcnv, RHO, alphacnv, edgeRadius, csiI, thetaI)
 
     T = sc.rigidInverse(Tng(phi2))
-    pointO = T @ sc.rotZ(signThick * 2 * np.pi / nT) @ ggt(phiEnvO) @ ca.vertcat(toolO, 1)
-    pointI = T * ggt(phiEnvI) @ ca.vertcat(toolI, 1)
+    pointO = T @ sc.TrotZ(signThick * 2 * np.pi / nT) @ ggt(phiEnvO) @ ca.vertcat(toolO, 1)
+    pointI = T @ ggt(phiEnvI) @ ca.vertcat(toolI, 1)
 
     toolOprime, toolNOprime = parametric_tool_casadi('convex', Rpcvx, RHO, alphacvx, edgeRadius, csiOprime, thetaOprime)
     toolIprime, toolNIprime = parametric_tool_casadi('concave', Rpcnv, RHO, alphacnv, edgeRadius, csiIprime, thetaIprime)
-    pointOprime = ggt(phiEnvOprime) @ ca.ertcat(toolOprime, 1)
+    pointOprime = ggt(phiEnvOprime) @ ca.vertcat(toolOprime, 1)
     normalOprime = ggt(phiEnvOprime) @ ca.vertcat(toolNOprime, 0)
     pointIprime = ggt(phiEnvIprime) @ ca.vertcat(toolIprime, 1)
     normalIprime = ggt(phiEnvIprime) @ ca.vertcat(toolNIprime, 0)
@@ -130,32 +143,51 @@ def approxToolIdentification_casadi(data, member, RHO = None):
     pointIprime = T @ pointIprime
     normalIprime = T @ normalIprime
 
-    out = np.zeros((17, 1), dtype=x[0].dtype)
-    out[0:3] = (pointO[0:3] - np.array([-(hamc - ham), +signThick * t / 2, 0]))
-    out[3:6] = (pointI[0:3] - np.array([-(hamc - ham), -signThick * t / 2, 0]))
-    out[6] = pointOprime[2]
-    out[7] = pointOprime[0] * normalOprime[1] - pointOprime[1] * normalOprime[0]
-    out[8] = ca.cos(pressAngCvx*180/pi) * sqrt(normalOprime[0]**2 + normalOprime[1]**2) + signThick * normalOprime[1]
-    out[9] = pointIprime[2]
-    out[10] = pointIprime[0] * normalIprime[1] - pointIprime[1] * normalIprime[0]
-    out[11] = ca.cos(pressAngCnv*180/pi) * sqrt(normalIprime[0]**2 + normalIprime[1]**2) - signThick * normalIprime[1]
-    out[12] = ca.mtimes([toolNOprime.T, ca.vertcat(0, 0, 1)], Vgt(phiEnvOprime) * ca.vertcat(toolOprime, 1))
-    out[13] = ca.mtimes([toolNIprime.T, ca.ertcat(0, 0, 1)], Vgt(phiEnvIprime) * ca.vertcat(toolIprime, 1))
-    out[14] = ca.mtimes([toolNO.T, ca.vertcat(0, 0, 1)], Vgt(phiEnvO) * ca.vertcat(toolO, 1))
-    out[15] = ca.mtimes([toolNI.T, ca.vertcat(0, 0, 1)], Vgt(phiEnvI) * ca.vertcat(toolI, 1))
+    out = ca.SX(17, 1)
+    out[0:3] = (pO - np.array([-(hamc - ham), +signThick * t / 2, 0]))
+    out[3:6] = (pI - np.array([-(hamc - ham), -signThick * t / 2, 0]))
+    out[6] = pOp[2]
+    out[7] = pOp[0] * nOp[1] - pOp[1] * nOp[0]
+    out[8] = ca.cos(pressAngCvx*pi/180) * ca.sqrt(normalOprime[0]**2 + normalOprime[1]**2) + signThick * normalOprime[1]
+    out[9] = pIp[2]
+    out[10] = pIp[0] * nIp[1] - pIp[1] * nIp[0]
+    out[11] = ca.cos(pressAngCnv*pi/180) * ca.sqrt(normalIprime[0]**2 + normalIprime[1]**2) - signThick * normalIprime[1]
+    out[12] = ca.vertcat(toolNOprime, 1).T @ Vgt(phiEnvOprime) @ ca.vertcat(toolOprime, 1)
+    out[13] = ca.vertcat(toolNIprime, 1).T @ Vgt(phiEnvIprime) @ ca.vertcat(toolIprime, 1)
+    out[14] = ca.vertcat(toolNO, 1).T @ Vgt(phiEnvO) @ ca.vertcat(toolO, 1)
+    out[15] = ca.vertcat(toolNI, 1).T @ Vgt(phiEnvI) @ ca.vertcat(toolI, 1)
     out[16] = Rpcnv - (2 * rc0 - Rpcvx)
+    out[17:20] = pO-pointO[0:3]
+    out[17:20] = pI-pointI[0:3]
+    out[17:20] = pOp-pointOprime[0:3]
+    out[17:20] = pIp-pointIprime[0:3]
+    out[17:20] = nOp-pointOprime[0:3]
+    out[17:20] = nIp-pointIprime[0:3]
 
-    sys_expr = out
+    fun_test = ca.Function('ft', [x_unscaled], [sqrt(normalOprime[0]**2 + normalOprime[1]**2)])
     opts = IPOPT_global_options()
-    problem = {'x': x, 'g': sys_expr, 'f': 0}
+    problem = {'x': x_unscaled, 'g': out, 'f': 0}
     solver = ca.nlpsol('S', 'ipopt', problem, opts)
 
     x0 = (x0 - lb)/(ub - lb)
 
-    solution  = solver(x0 = x0, lbx = lb*0, ubx = lb*0 + 1, ubg = 0, lbg = 0)
-    res = solution.x.full
-    print(res)
-    return res
+    solution  = solver(x0 = x0, lbx = lb*0, ubx = lb*0+1, ubg = 0, lbg = 0)
+    res = solution['x'].full().squeeze()
+    res = res*(ub-lb) + lb
+
+    data[cutterFieldName][f'{subCutterFieldName}RHO'] = RHO
+    data[cutterConvexFieldName][f'{subConvexCutterFieldName}RHO'] = RHO
+    data[cutterConvexFieldName][f'{subConvexCutterFieldName}POINTRADIUS'] = res[0]
+    data[cutterConvexFieldName][f'{subConvexCutterFieldName}BLADEANGLE'] = res[1]
+    data[cutterFieldName][f'{subCutterFieldName}BLADEANGLE'] = res[2]
+    data[cutterFieldName][f'{subCutterFieldName}POINTRADIUS'] = res[-1]
+    edge_radius = (res[-1] - res[0])/2.5
+    data[cutterFieldName][f'{subCutterFieldName}EDGERADIUS'] = edge_radius
+    data[cutterConvexFieldName][f'{subConvexCutterFieldName}EDGERADIUS'] = edge_radius
+    triplet_concave = [res[3], res[4], res[14]]
+    triplet_convex = [res[5], res[6], res[15]]
+
+    return data, triplet_concave, triplet_convex
 
 def AGMAcomputationHypoid(Hand, taper, initialConeData, toothInitialData, Method = 1, rc0 = None, GearGenType = "Generated"):
     
@@ -185,7 +217,7 @@ def AGMAcomputationHypoid(Hand, taper, initialConeData, toothInitialData, Method
     jen  = toothInitialData["jen"]                  # outer normal backlash
     xsmn = toothInitialData["xsmn"]                 # thickness modification coefficient
 
-    DeltaSIGMA = SIGMA-pi/2
+    DeltaSIGMA = SIGMA-pi/2                
 
     # method 0 (spiral bevel gears)
     delta1 = atan(sin(SIGMA)/(cos(SIGMA) + u))    # pinion pith angle
@@ -459,6 +491,9 @@ def AGMAcomputationHypoid(Hand, taper, initialConeData, toothInitialData, Method
     baseconApexPin = tzR1 - baseconethickPin/cos(pi/2-deltaf1)
     baseconApexGear = tzR2 - baseconethickGear/cos(pi/2-deltaf2)
 
+    pinion_commonFieldName, pinion_subCommonFieldName  = get_data_field_names('pinion', 'concave', fields = 'common')
+    gear_commonFieldName, gear_subCommonFieldName = get_data_field_names('gear', 'concave', fields = 'common')
+
     ## System data
     basicDesignData["SystemData"]["HAND"] = Hand
     basicDesignData["SystemData"]["shaft_angle"] = SIGMA*180/pi
@@ -470,51 +505,52 @@ def AGMAcomputationHypoid(Hand, taper, initialConeData, toothInitialData, Method
     basicDesignData["SystemData"]["NOMINALCOASTPRESSUREANGLE"] = alphanC*180/pi
     basicDesignData["SystemData"]["NORMALMODULE"] = mmn
 
-    basicDesignData["PinionCommonData"] = {
-        'pinGenType' : 'GENERATED',
-        'pinNTEETH' : z1,
-        'pinSPIRALANGLE' : betam1*180/pi,
-        'pinOUTERCONEDIST' : Re1,
-        'pinMEANCONEDIST' : Rm1,
-        'pinINNERCONEDIST': Ri1,
-        'pinMEANNORMALCHORDALTHICKNESS' : smnc1,
-        'pinMEANADDENDUM' : ham1,
-        'pinMEANCHORDALADDENDUM' : hamc1,
-        'pinFACEWIDTH' : b1,
-        'pinFACEANGLE' : deltaa1*180/pi,
-        'pinBACKANGLE' : delta1*180/pi,
-        'pinFRONTANGLE' : delta1*180/pi,
-        'pinPITCHANGLE' : delta1*180/pi,
-        'pinBASECONEANGLE' : deltaf1*180/pi,
-        'pinPITCHAPEX' : tz1,
-        'pinFACEAPEX' : tzF1,
-        'pinROOTAPEX' : tzR1,
-        'pinBASECONEAPEX' : baseconApexPin,
-        'pinMEANCUTTERRAIDUS' : rc0,
+    basicDesignData[pinion_commonFieldName] = {
+        f'{pinion_subCommonFieldName}GenType' : 'GENERATED',
+        f'{pinion_subCommonFieldName}NTEETH' : z1,
+        f'{pinion_subCommonFieldName}SPIRALANGLE' : betam1*180/pi,
+        f'{pinion_subCommonFieldName}OUTERCONEDIST' : Re1,
+        f'{pinion_subCommonFieldName}MEANCONEDIST' : Rm1,
+        f'{pinion_subCommonFieldName}INNERCONEDIST': Ri1,
+        f'{pinion_subCommonFieldName}MEANNORMALCHORDALTHICKNESS' : smnc1,
+        f'{pinion_subCommonFieldName}MEANADDENDUM' : ham1,
+        f'{pinion_subCommonFieldName}MEANCHORDALADDENDUM' : hamc1,
+        f'{pinion_subCommonFieldName}FACEWIDTH' : b1,
+        f'{pinion_subCommonFieldName}FACEANGLE' : deltaa1*180/pi,
+        f'{pinion_subCommonFieldName}BACKANGLE' : delta1*180/pi,
+        f'{pinion_subCommonFieldName}FRONTANGLE' : delta1*180/pi,
+        f'{pinion_subCommonFieldName}PITCHANGLE' : delta1*180/pi,
+        f'{pinion_subCommonFieldName}BASECONEANGLE' : deltaf1*180/pi,
+        f'{pinion_subCommonFieldName}PITCHAPEX' : tz1,
+        f'{pinion_subCommonFieldName}FACEAPEX' : tzF1,
+        f'{pinion_subCommonFieldName}ROOTAPEX' : tzR1,
+        f'{pinion_subCommonFieldName}BASECONEAPEX' : baseconApexPin,
+        f'{pinion_subCommonFieldName}MEANCUTTERRAIDUS' : rc0,
         }
     
-    basicDesignData["GearCommonData"] = {
-        'gearGenType' : GearGenType,
-        'gearNTEETH' : z2,
-        'gearSPIRALANGLE' : betam2*180/pi,
-        'gearOUTERCONEDIST' : Re2,
-        'gearMEANCONEDIST' : Rm2,
-        'gearINNERCONEDIST' : Ri2,
-        'gearMEANNORMALCHORDALTHICKNESS' : smnc2,
-        'gearMEANADDENDUM' : ham2,
-        'gearMEANCHORDALADDENDUM' : hamc2,
-        'gearFACEWIDTH' : b2,
-        'gearFACEANGLE' : deltaa2*180/pi,
-        'gearBACKANGLE' : delta2*180/pi,
-        'gearFRONTANGLE' : delta2*180/pi,
-        'gearPITCHANGLE' : delta2*180/pi,
-        'gearBASECONEANGLE' : deltaf2*180/pi,
-        'gearPITCHAPEX' : tz2,
-        'gearFACEAPEX' : tzF2,
-        'gearROOTAPEX' : tzR2,
-        'gearBASECONEAPEX' : baseconApexGear,
-        'gearMEANCUTTERRAIDUS' : rc0,
+    basicDesignData[gear_commonFieldName] = {
+        f'{gear_subCommonFieldName}GenType' : GearGenType,
+        f'{gear_subCommonFieldName}NTEETH' : z2,
+        f'{gear_subCommonFieldName}SPIRALANGLE' : betam2*180/pi,
+        f'{gear_subCommonFieldName}OUTERCONEDIST' : Re2,
+        f'{gear_subCommonFieldName}MEANCONEDIST' : Rm2,
+        f'{gear_subCommonFieldName}INNERCONEDIST' : Ri2,
+        f'{gear_subCommonFieldName}MEANNORMALCHORDALTHICKNESS' : smnc2,
+        f'{gear_subCommonFieldName}MEANADDENDUM' : ham2,
+        f'{gear_subCommonFieldName}MEANCHORDALADDENDUM' : hamc2,
+        f'{gear_subCommonFieldName}FACEWIDTH' : b2,
+        f'{gear_subCommonFieldName}FACEANGLE' : deltaa2*180/pi,
+        f'{gear_subCommonFieldName}BACKANGLE' : delta2*180/pi,
+        f'{gear_subCommonFieldName}FRONTANGLE' : delta2*180/pi,
+        f'{gear_subCommonFieldName}PITCHANGLE' : delta2*180/pi,
+        f'{gear_subCommonFieldName}BASECONEANGLE' : deltaf2*180/pi,
+        f'{gear_subCommonFieldName}PITCHAPEX' : tz2,
+        f'{gear_subCommonFieldName}FACEAPEX' : tzF2,
+        f'{gear_subCommonFieldName}ROOTAPEX' : tzR2,
+        f'{gear_subCommonFieldName}BASECONEAPEX' : baseconApexGear,
+        f'{gear_subCommonFieldName}MEANCUTTERRAIDUS' : rc0,
         }
+    
     handSign = +1
     phicnv = alphanC
     phicvx = alphanD
@@ -528,39 +564,44 @@ def AGMAcomputationHypoid(Hand, taper, initialConeData, toothInitialData, Method
     machCtrbckPin = tzR1 - slidingBasePin/sin(deltaf1)
     machCtrbckGear = tzR2 - slidingBaseGear/sin(deltaf2)
     tz2 + (Rm2*sin(thetaf2) - hfm2*cos(thetaf2))/sin(deltaf2)
+    
 
+    machine_field, sub_machine_field = get_data_field_names('gear', 'concave', fields = 'machine')
     ## generated gear
     # concave gear
-    basicDesignData['GearConcaveMachineSettings']['gearCnvRADIALSETTING'] = sqrt((Rm2*cos(thetaf2))**2 + rc0**2 - 2*Rm2*cos(thetaf2)*rc0*sin(betam2))
-    basicDesignData['GearConcaveMachineSettings']['gearCnvCRADLEANGLE'] = atan(   rc0*cos(betam2)/(Rm2*cos(thetaf2) - rc0*sin(betam2))   )*180/pi
-    basicDesignData['GearConcaveMachineSettings']['gearCnvROOTANGLE'] = deltaf2*180/pi
-    basicDesignData['GearConcaveMachineSettings']['gearCnvSLIDINGBASE'] = slidingBaseGear
-    basicDesignData['GearConcaveMachineSettings']['gearCnvMACHCTRBACK'] = machCtrbckGear
-    basicDesignData['GearConcaveMachineSettings']['gearCnvRATIOROLL'] = cos(thetaf2)/sin(delta2)
+    basicDesignData[machine_field][f'{sub_machine_field}RADIALSETTING'] = sqrt((Rm2*cos(thetaf2))**2 + rc0**2 - 2*Rm2*cos(thetaf2)*rc0*sin(betam2))
+    basicDesignData[machine_field][f'{sub_machine_field}CRADLEANGLE'] = atan(   rc0*cos(betam2)/(Rm2*cos(thetaf2) - rc0*sin(betam2))   )*180/pi
+    basicDesignData[machine_field][f'{sub_machine_field}ROOTANGLE'] = deltaf2*180/pi
+    basicDesignData[machine_field][f'{sub_machine_field}SLIDINGBASE'] = slidingBaseGear
+    basicDesignData[machine_field][f'{sub_machine_field}MACHCTRBACK'] = machCtrbckGear
+    basicDesignData[machine_field][f'{sub_machine_field}RATIOROLL'] = cos(thetaf2)/sin(delta2)
 
+    machine_field, sub_machine_field = get_data_field_names('gear', 'convex', fields = 'machine')
     # convex gear
-    basicDesignData['GearConvexMachineSettings']['gearCvxRADIALSETTING'] = sqrt((Rm2*cos(thetaf2))**2 + rc0**2 - 2*Rm2*cos(thetaf2)*rc0*sin(betam2))
-    basicDesignData['GearConvexMachineSettings']['gearCvxCRADLEANGLE'] = atan(   rc0*cos(betam2)/(Rm2*cos(thetaf2) - rc0*sin(betam2))   )*180/pi
-    basicDesignData['GearConvexMachineSettings']['gearCvxROOTANGLE'] = deltaf2*180/pi
-    basicDesignData['GearConvexMachineSettings']['gearCvxSLIDINGBASE'] = slidingBaseGear
-    basicDesignData['GearConvexMachineSettings']['gearCvxMACHCTRBACK'] = machCtrbckGear
-    basicDesignData['GearConvexMachineSettings']['gearCvxRATIOROLL'] = cos(thetaf2)/sin(delta2)
+    basicDesignData[machine_field][f'{sub_machine_field}RADIALSETTING'] = sqrt((Rm2*cos(thetaf2))**2 + rc0**2 - 2*Rm2*cos(thetaf2)*rc0*sin(betam2))
+    basicDesignData[machine_field][f'{sub_machine_field}CRADLEANGLE'] = atan(   rc0*cos(betam2)/(Rm2*cos(thetaf2) - rc0*sin(betam2))   )*180/pi
+    basicDesignData[machine_field][f'{sub_machine_field}ROOTANGLE'] = deltaf2*180/pi
+    basicDesignData[machine_field][f'{sub_machine_field}SLIDINGBASE'] = slidingBaseGear
+    basicDesignData[machine_field][f'{sub_machine_field}MACHCTRBACK'] = machCtrbckGear
+    basicDesignData[machine_field][f'{sub_machine_field}RATIOROLL'] = cos(thetaf2)/sin(delta2)
 
     # concave pinion
-    basicDesignData['PinionConcaveMachineSettings']['pinCnvRADIALSETTING'] = sqrt((Rm1*cos(thetaf1))**2 + rc0**2 - 2*Rm1*cos(thetaf1)*rc0*sin(betam1))
-    basicDesignData['PinionConcaveMachineSettings']['pinCnvCRADLEANGLE'] = atan(   rc0*cos(betam1)/(Rm1*cos(thetaf1) - rc0*sin(betam1))   )*180/pi
-    basicDesignData['PinionConcaveMachineSettings']['pinCnvROOTANGLE'] = deltaf1*180/pi
-    basicDesignData['PinionConcaveMachineSettings']['pinCnvSLIDINGBASE'] = slidingBasePin
-    basicDesignData['PinionConcaveMachineSettings']['pinCnvMACHCTRBACK'] = machCtrbckPin
-    basicDesignData['PinionConcaveMachineSettings']['pinCnvRATIOROLL'] = cos(thetaf1)/sin(delta1)
+    machine_field, sub_machine_field = get_data_field_names('pinion', 'concave', fields = 'machine')
+    basicDesignData[machine_field][f'{sub_machine_field}RADIALSETTING'] = sqrt((Rm1*cos(thetaf1))**2 + rc0**2 - 2*Rm1*cos(thetaf1)*rc0*sin(betam1))
+    basicDesignData[machine_field][f'{sub_machine_field}CRADLEANGLE'] = atan(   rc0*cos(betam1)/(Rm1*cos(thetaf1) - rc0*sin(betam1))   )*180/pi
+    basicDesignData[machine_field][f'{sub_machine_field}ROOTANGLE'] = deltaf1*180/pi
+    basicDesignData[machine_field][f'{sub_machine_field}SLIDINGBASE'] = slidingBasePin
+    basicDesignData[machine_field][f'{sub_machine_field}MACHCTRBACK'] = machCtrbckPin
+    basicDesignData[machine_field][f'{sub_machine_field}RATIOROLL'] = cos(thetaf1)/sin(delta1)
 
     # convex pinion
-    basicDesignData['PinionConvexMachineSettings']['pinCvxRADIALSETTING'] = sqrt((Rm1*cos(thetaf1))**2 + rc0**2 - 2*Rm1*cos(thetaf1)*rc0*sin(betam1))
-    basicDesignData['PinionConvexMachineSettings']['pinCvxCRADLEANGLE'] = atan(   rc0*cos(betam1)/(Rm1*cos(thetaf1) - rc0*sin(betam1))   )*180/pi
-    basicDesignData['PinionConvexMachineSettings']['pinCvxROOTANGLE'] = deltaf1*180/pi
-    basicDesignData['PinionConvexMachineSettings']['pinCvxSLIDINGBASE'] = slidingBasePin
-    basicDesignData['PinionConvexMachineSettings']['pinCvxMACHCTRBACK'] = machCtrbckPin
-    basicDesignData['PinionConvexMachineSettings']['pinCvxRATIOROLL'] = cos(thetaf1)/sin(delta1)
+    machine_field, sub_machine_field = get_data_field_names('pinion', 'convex', fields = 'machine')
+    basicDesignData[machine_field][f'{sub_machine_field}RADIALSETTING'] = sqrt((Rm1*cos(thetaf1))**2 + rc0**2 - 2*Rm1*cos(thetaf1)*rc0*sin(betam1))
+    basicDesignData[machine_field][f'{sub_machine_field}CRADLEANGLE'] = atan(   rc0*cos(betam1)/(Rm1*cos(thetaf1) - rc0*sin(betam1))   )*180/pi
+    basicDesignData[machine_field][f'{sub_machine_field}ROOTANGLE'] = deltaf1*180/pi
+    basicDesignData[machine_field][f'{sub_machine_field}SLIDINGBASE'] = slidingBasePin
+    basicDesignData[machine_field][f'{sub_machine_field}MACHCTRBACK'] = machCtrbckPin
+    basicDesignData[machine_field][f'{sub_machine_field}RATIOROLL'] = cos(thetaf1)/sin(delta1)
 
     # cutter data
     PQ = (hfm2 - ham2)/2
@@ -572,29 +613,31 @@ def AGMAcomputationHypoid(Hand, taper, initialConeData, toothInitialData, Method
 
     # gear cutter
     # concave
-    basicDesignData["GearConcaveCutterData"]["gearCutCnvPOINTRADIUS"] = pointRadiusConcave
-    basicDesignData["GearConcaveCutterData"]["gearCutCnvBLADEANGLE"] = phicnv*180/pi
-    basicDesignData["GearConcaveCutterData"]["gearCutCnvEDGERADIUS"] = edgeRadius
-    basicDesignData["GearConcaveCutterData"]["gearCutCnvTYPE"] = 'CURVED'
-    basicDesignData["GearConcaveCutterData"]["gearCutCnvTopTYPE"] = 'NONE'
-    basicDesignData["GearConcaveCutterData"]["gearCutCnvFlankTYPE"] = 'NONE'
-    basicDesignData["GearConcaveCutterData"]["gearCutCnvRHO"] = 800
-    basicDesignData["GearConcaveCutterData"]["gearCutCnvTopDepth"] = None
-    basicDesignData["GearConcaveCutterData"]["gearCutCnvTopRad"] = None
-    basicDesignData["GearConcaveCutterData"]["gearCutCnvFlankDepth"] = None
-    basicDesignData["GearConcaveCutterData"]["gearCutCnvFlankRad"] = None
+    cutter_field, sub_cutter_field = get_data_field_names('gear', 'concave', fields = 'cutter')
+    basicDesignData[cutter_field][f"{sub_cutter_field}POINTRADIUS"] = pointRadiusConcave
+    basicDesignData[cutter_field][f"{sub_cutter_field}BLADEANGLE"] = phicnv*180/pi
+    basicDesignData[cutter_field][f"{sub_cutter_field}EDGERADIUS"] = edgeRadius
+    basicDesignData[cutter_field][f"{sub_cutter_field}TYPE"] = 'CURVED'
+    basicDesignData[cutter_field][f"{sub_cutter_field}TopremTYPE"] = 'NONE'
+    basicDesignData[cutter_field][f"{sub_cutter_field}FlankremTYPE"] = 'NONE'
+    basicDesignData[cutter_field][f"{sub_cutter_field}RHO"] = 800
+    basicDesignData[cutter_field][f"{sub_cutter_field}TopremDEPTH"] = None
+    basicDesignData[cutter_field][f"{sub_cutter_field}TopremRADIUS"] = None
+    basicDesignData[cutter_field][f"{sub_cutter_field}FlankremDEPTH"] = None
+    basicDesignData[cutter_field][f"{sub_cutter_field}FlankremRADIUS"] = None
     # convex
-    basicDesignData["GearConvexCutterData"]["gearCutCvxPOINTRADIUS"] = pointRadiusConvex
-    basicDesignData["GearConvexCutterData"]["gearCutCvxBLADEANGLE"] = phicvx*180/pi
-    basicDesignData["GearConvexCutterData"]["gearCutCvxEDGERADIUS"] = edgeRadius
-    basicDesignData["GearConvexCutterData"]["gearCutCvxTYPE"] = 'CURVED'
-    basicDesignData["GearConvexCutterData"]["gearCutCvxTopTYPE"] = 'NONE'
-    basicDesignData["GearConvexCutterData"]["gearCutCvxFlankTYPE"] = 'NONE'
-    basicDesignData["GearConvexCutterData"]["gearCutCvxRHO"] = 800
-    basicDesignData["GearConvexCutterData"]["gearCutCvxTopDepth"] = None
-    basicDesignData["GearConvexCutterData"]["gearCutCvxTopRad"] = None
-    basicDesignData["GearConvexCutterData"]["gearCutCvxFlankDepth"] = None
-    basicDesignData["GearConvexCutterData"]["gearCutCvxFlankRad"] = None
+    cutter_field, sub_cutter_field = get_data_field_names('gear', 'convex', fields = 'cutter')
+    basicDesignData[cutter_field][f"{sub_cutter_field}POINTRADIUS"] = pointRadiusConvex
+    basicDesignData[cutter_field][f"{sub_cutter_field}BLADEANGLE"] = phicvx*180/pi
+    basicDesignData[cutter_field][f"{sub_cutter_field}EDGERADIUS"] = edgeRadius
+    basicDesignData[cutter_field][f"{sub_cutter_field}TYPE"] = 'CURVED'
+    basicDesignData[cutter_field][f"{sub_cutter_field}TopremTYPE"] = 'NONE'
+    basicDesignData[cutter_field][f"{sub_cutter_field}FlankremTYPE"] = 'NONE'
+    basicDesignData[cutter_field][f"{sub_cutter_field}RHO"] = 800
+    basicDesignData[cutter_field][f"{sub_cutter_field}TopremDEPTH"] = None
+    basicDesignData[cutter_field][f"{sub_cutter_field}TopremRADIUS"] = None
+    basicDesignData[cutter_field][f"{sub_cutter_field}FlankremDEPTH"] = None
+    basicDesignData[cutter_field][f"{sub_cutter_field}FlankremRADIUS"] = None
 
     # pinion cutter
     rc0P = rc0
@@ -609,32 +652,34 @@ def AGMAcomputationHypoid(Hand, taper, initialConeData, toothInitialData, Method
             case "trl":
                 rc0P = (Rm1 + 1.1*Rm1*sin(betam1))/2
 
-    pointRadiusConcave = rc0P + smnc1/2;
-    pointRadiusConvex = rc0P - smnc1/2;
+    pointRadiusConcave = rc0P + smnc1/2
+    pointRadiusConvex = rc0P - smnc1/2
     # concave
-    basicDesignData["PinionConcaveCutterData"]["pinCutCnvPOINTRADIUS"] = pointRadiusConcave
-    basicDesignData["PinionConcaveCutterData"]["pinCutCnvBLADEANGLE"] = phicnv*180/pi
-    basicDesignData["PinionConcaveCutterData"]["pinCutCnvEDGERADIUS"] = edgeRadius
-    basicDesignData["PinionConcaveCutterData"]["pinCutCnvTYPE"] = 'STRAIGHT'
-    basicDesignData["PinionConcaveCutterData"]["pinCutCnvTopTYPE"] = 'NONE'
-    basicDesignData["PinionConcaveCutterData"]["pinCutCnvFlankTYPE"] = 'NONE'
-    basicDesignData["PinionConcaveCutterData"]["pinCutCnvRHO"] = None
-    basicDesignData["PinionConcaveCutterData"]["pinCutCnvTopDepth"] = None
-    basicDesignData["PinionConcaveCutterData"]["pinCutCnvTopRad"] = None
-    basicDesignData["PinionConcaveCutterData"]["pinCutCnvFlankDepth"] = None
-    basicDesignData["PinionConcaveCutterData"]["pinCutCnvFlankRad"] = None
+    cutter_field, sub_cutter_field = get_data_field_names('pinion', 'concave', fields = 'cutter')
+    basicDesignData[cutter_field][f"{sub_cutter_field}POINTRADIUS"] = pointRadiusConcave
+    basicDesignData[cutter_field][f"{sub_cutter_field}BLADEANGLE"] = phicnv*180/pi
+    basicDesignData[cutter_field][f"{sub_cutter_field}EDGERADIUS"] = edgeRadius
+    basicDesignData[cutter_field][f"{sub_cutter_field}TYPE"] = 'STRAIGHT'
+    basicDesignData[cutter_field][f"{sub_cutter_field}TopremTYPE"] = 'NONE'
+    basicDesignData[cutter_field][f"{sub_cutter_field}FlankremTYPE"] = 'NONE'
+    basicDesignData[cutter_field][f"{sub_cutter_field}RHO"] = None
+    basicDesignData[cutter_field][f"{sub_cutter_field}TopremDEPTH"] = None
+    basicDesignData[cutter_field][f"{sub_cutter_field}TopremRADIUS"] = None
+    basicDesignData[cutter_field][f"{sub_cutter_field}FlankremDEPTH"] = None
+    basicDesignData[cutter_field][f"{sub_cutter_field}FlankremRADIUS"] = None
     # convex
-    basicDesignData["PinionConvexCutterData"]["pinCutCvxPOINTRADIUS"] = pointRadiusConvex
-    basicDesignData["PinionConvexCutterData"]["pinCutCvxBLADEANGLE"] = phicvx*180/pi
-    basicDesignData["PinionConvexCutterData"]["pinCutCvxEDGERADIUS"] = edgeRadius
-    basicDesignData["PinionConvexCutterData"]["pinCutCvxTYPE"] = 'STRAIGHT'
-    basicDesignData["PinionConvexCutterData"]["pinCutCvxTopTYPE"] = 'NONE'
-    basicDesignData["PinionConvexCutterData"]["pinCutCvxFlankTYPE"] = 'NONE'
-    basicDesignData["PinionConvexCutterData"]["pinCutCvxRHO"] = None
-    basicDesignData["PinionConvexCutterData"]["pinCutCvxTopDepth"] = None
-    basicDesignData["PinionConvexCutterData"]["pinCutCvxTopRad"] = None
-    basicDesignData["PinionConvexCutterData"]["pinCutCvxFlankDepth"] = None
-    basicDesignData["PinionConvexCutterData"]["pinCutCvxFlankRad"] = None
+    cutter_field, sub_cutter_field = get_data_field_names('pinion', 'convex', fields = 'cutter')
+    basicDesignData[cutter_field][f"{sub_cutter_field}POINTRADIUS"] = pointRadiusConvex
+    basicDesignData[cutter_field][f"{sub_cutter_field}BLADEANGLE"] = phicvx*180/pi
+    basicDesignData[cutter_field][f"{sub_cutter_field}EDGERADIUS"] = edgeRadius
+    basicDesignData[cutter_field][f"{sub_cutter_field}TYPE"] = 'STRAIGHT'
+    basicDesignData[cutter_field][f"{sub_cutter_field}TopremTYPE"] = 'NONE'
+    basicDesignData[cutter_field][f"{sub_cutter_field}FlankremTYPE"] = 'NONE'
+    basicDesignData[cutter_field][f"{sub_cutter_field}RHO"] = None
+    basicDesignData[cutter_field][f"{sub_cutter_field}TopremDEPTH"] = None
+    basicDesignData[cutter_field][f"{sub_cutter_field}TopremRADIUS"] = None
+    basicDesignData[cutter_field][f"{sub_cutter_field}FlankremDEPTH"] = None
+    basicDesignData[cutter_field][f"{sub_cutter_field}FlankremRADIUS"] = None
 
     return basicDesignData
 
@@ -747,8 +792,10 @@ def main():
     dictprint(data)        
     print(gearBlank)
     print(pinionBlank)  
-    approxToolIdentification_casadi(data, 'gear', RHO = 500)
-
+    data, trpl_cnv, trpl_cvx = approxToolIdentification_casadi(data, 'gear', RHO = 500)
+    data, trpl_cnv, trpl_cvx = approxToolIdentification_casadi(data, 'pinion', RHO = 500)
+    print(trpl_cnv, trpl_cvx)
+    dictprint(data)
     return
 
 def main2():
@@ -776,4 +823,4 @@ def main2():
     print(ggt(a, 2).full())
 
 if __name__ == "__main__":
-    main2()
+    main()

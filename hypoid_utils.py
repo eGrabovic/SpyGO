@@ -2,7 +2,7 @@ import numpy as np
 from math import sqrt, pi, atan, cos, sin, acos, asin, tan
 from utils import *
 
-def get_data_field_names(member, flank):
+def get_data_field_names(member, flank, fields = 'all'):
     if member.lower() == 'pinion' and flank.lower() == 'concave':
         cutterFieldName = 'PinionConcaveCutterData'
         subCutterFieldName = 'pinCutCnv'
@@ -32,24 +32,18 @@ def get_data_field_names(member, flank):
         machineFieldName = 'GearConvexMachineSettings'
         subMachineFieldName = 'gearCvx'
 
-    return cutterFieldName, subCutterFieldName, commonFieldName, subCommonFieldName,\
-            machineFieldName, subMachineFieldName
+    if fields.lower() == 'all':
+        return cutterFieldName, subCutterFieldName, commonFieldName, subCommonFieldName,machineFieldName, subMachineFieldName
+    elif fields.lower() == 'common':
+        return commonFieldName, subCommonFieldName
+    elif fields.lower() == 'cutter':
+        return cutterFieldName, subCutterFieldName
+    elif fields.lower() == 'machine':
+        return machineFieldName, subMachineFieldName
 
 def assignMachinePar(data, member, flank):
-    if member.lower() == 'pinion':
-        if flank.lower() == 'concave':
-            mainFieldName = 'PinionConcaveMachineSettings'
-            subFieldName = 'pinCnv'
-        else:
-            mainFieldName = 'PinionConvexMachineSettings'
-            subFieldName = 'pinCvx'
-    else:
-        if flank.lower() == 'concave':
-            mainFieldName = 'GearConcaveMachineSettings'
-            subFieldName = 'gearCnv'
-        else:
-            mainFieldName = 'GearConvexMachineSettings'
-            subFieldName = 'gearCvx'
+
+    mainFieldName, subFieldName = get_data_field_names(member, flank, fields = 'machine')
 
     S0    = data[mainFieldName][f'{subFieldName}RADIALSETTING']
     sig0  = data[mainFieldName][f'{subFieldName}TILTANGLE']
@@ -126,7 +120,7 @@ def manageMachinePar(member, systemHand, mode = 'gleason'):
             [1, 1, 1/2, 1/6, 1/24, 1/120, 1/720, 1/5040],
             [1, 1, 1/2, 1/6, 1/24, 1/120*1/1000, 1/720*1/1000, 1/5040],
             [1 ,1, 1/2, 1/6, 1/24, 1/120, 1/720, 1/5040],
-            [0, 1, 1/2, 1/6, 1/24, 1/120, 1/720*1/1000, 1/5040*1/1000],
+            [1, 1, 1/2, 1/6, 1/24, 1/120, 1/720*1/1000, 1/5040*1/1000],
             [1, 1, 1/2, 1/6, 1/24, 1/120, 1/720, 1/5040],
             [1, 1, 1/2, 1/6, 1/24, 1/120, 1/720, 1/5040]
         ])
@@ -143,7 +137,7 @@ def manageMachinePar(member, systemHand, mode = 'gleason'):
                 [+1, +1, +1, +1, +1, +1, +1, +1], # E vertical motion
                 [+1, +1, +1, +1, +1, +1, +1, +1], # B sliding base (helical motion)
                 [-1, +1, +1, +1, +1, +1, +1, +1], # q cradle
-                [+0, +1, -1, -1, -1, -1, -1, -1], # roll
+                [+1, +1, -1, -1, -1, -1, -1, -1], # roll
                 [+1, +1, +1, +1, +1, +1, +1, +1], # machCtr
                 [+1, +1, +1, +1 ,+1, +1, +1, +1], #root
                 ])
@@ -155,7 +149,7 @@ def manageMachinePar(member, systemHand, mode = 'gleason'):
                 [+1, +1, -1, +1, -1, +1, +1, +1],
                 [+1, -1, +1, -1, +1, -1, +1, -1],
                 [-1, +1, +1, +1, +1, +1, +1, +1],
-                [+0, +1, +1, -1, +1, -1, +1, -1],
+                [+1, +1, +1, -1, +1, -1, +1, -1],
                 [+1, +1, +1, +1, +1, +1, +1, +1],
                 [+1, +1, +1, +1 ,+1, +1, +1, +1]
             ])
@@ -168,7 +162,7 @@ def manageMachinePar(member, systemHand, mode = 'gleason'):
                 [-1, +1, +1, +1, +1, +1, +1, +1],
                 [+1, +1, +1, +1, +1, +1, +1, +1],
                 [+1, +1, +1, +1, +1, +1, +1, +1],
-                [+0, +1, -1, -1, -1, -1, -1, -1],
+                [+1, +1, -1, -1, -1, -1, -1, -1],
                 [+1, +1, +1, +1, +1, +1, +1, +1],
                 [+1, +1, +1, +1 ,+1, +1, +1, +1]
             ])
@@ -180,7 +174,7 @@ def manageMachinePar(member, systemHand, mode = 'gleason'):
                 [+1, +1, -1, +1, -1, +1, +1, +1],
                 [+1, -1, +1, -1, +1, -1, +1, -1],
                 [-1, +1, +1, +1, +1, +1, +1, +1],
-                [+0, +1, +1, -1, +1, -1, +1, -1],
+                [+1, +1, +1, -1, +1, -1, +1, -1],
                 [+1, +1, +1, +1, +1, +1, +1, +1],
                 [+1, +1, +1, +1 ,+1, +1, +1, +1]
             ])
@@ -246,16 +240,11 @@ def assignToolPar(data, member, flank, stfFlank = None):
         rhoTop = 50 # initialize to a reasonable blend radius in case an identification activates the feature
         Czblade = rho*sin(alphap*pi/180)
         theta_iniz_blade = asin((Czblade + rhof)/(rho + rhof))
-
-        try:
-            alphaTop = data['PinionConcaveCutterData'][f'{subCutterFieldName}TopremANGLE']
-            msgbox("Tool with angle offset between tip & blade not implemented", 'Error', 1)
-            return
-        except:
-            pass
-        
+      
         stftop = rhof - rhof*sin(theta_iniz_blade)
         alphaTop = 0
+        if data[cutterFieldName][f'{subCutterFieldName}TopremANGLE'] is not 0:
+            msgbox("Tool with angle offset between tip & blade (toprem angle) not implemented", 'Error', 1)
 
     if data[cutterFieldName][f'{subCutterFieldName}FlankremTYPE'].lower() == 'blended':
         rhoFlank = data[cutterFieldName][f'{subCutterFieldName}FlankremRADIUS']
@@ -272,6 +261,8 @@ def assignToolPar(data, member, flank, stfFlank = None):
         if stfFlank == None:
             stfFlank = rho/3
         alphaTop = 0
+        if data[cutterFieldName][f'{subCutterFieldName}FlankremANGLE'] is not 0:
+            msgbox("Tool with angle offset between blade and flankrem (flankrem angle) not implemented", 'Error', 1)
 
     return (Rp,rho,rhof,rhoTop,rhoFlank,alphap,stfFlank,stftop,alphaTop,alphaFlank)
 
@@ -336,13 +327,39 @@ def initial_guess_from_data(data, member, flank): # wrapper for initielguesses()
     return triplet_guess
 
 def initialize_design_data(): # return designData
+    commonFieldName, subCommonFieldName  = get_data_field_names('gear', 'concave', fields = 'common')
+    commonFieldName2, subCommonFieldName2  = get_data_field_names('pinion', 'concave', fields = 'common')
+    commonStrings = [commonFieldName, commonFieldName2]
+    subCommonStrings = [subCommonFieldName, subCommonFieldName2]
+    cutterStrings = []
+    subCutterStrings = []
+    machineStrings = []
+    subMachineStrings = []
+    cutter_field, sub_cutter_field  = get_data_field_names('gear', 'concave', fields = 'cutter')
+    cutterStrings.append(cutter_field)
+    subCutterStrings.append(sub_cutter_field)
+    cutter_field, sub_cutter_field  = get_data_field_names('gear', 'convex', fields = 'cutter')
+    cutterStrings.append(cutter_field)
+    subCutterStrings.append(sub_cutter_field)
+    cutter_field, sub_cutter_field  = get_data_field_names('pinion', 'concave', fields = 'cutter')
+    cutterStrings.append(cutter_field)
+    subCutterStrings.append(sub_cutter_field)
+    cutter_field, sub_cutter_field  = get_data_field_names('pinion', 'convex', fields = 'cutter')
+    cutterStrings.append(cutter_field)
+    subCutterStrings.append(sub_cutter_field)
+    cutter_field, sub_cutter_field  = get_data_field_names('gear', 'concave', fields = 'machine')
+    machineStrings.append(cutter_field)
+    subMachineStrings.append(sub_cutter_field)
+    cutter_field, sub_cutter_field  = get_data_field_names('gear', 'convex', fields = 'machine')
+    machineStrings.append(cutter_field)
+    subMachineStrings.append(sub_cutter_field)
+    cutter_field, sub_cutter_field  = get_data_field_names('pinion', 'concave', fields = 'machine')
+    machineStrings.append(cutter_field)
+    subMachineStrings.append(sub_cutter_field)
+    cutter_field, sub_cutter_field  = get_data_field_names('pinion', 'convex', fields = 'machine')
+    machineStrings.append(cutter_field)
+    subMachineStrings.append(sub_cutter_field)
 
-    commonStrings = ['GearCommonData', 'PinionCommonData']
-    subCommonStrings = ['gear', 'pin']
-    cutterStrings = ['GearConcaveCutterData','GearConvexCutterData','PinionConcaveCutterData','PinionConvexCutterData']
-    subCutterStrings = ['gearCutCnv', 'gearCutCvx', 'pinCutCnv', 'pinCutCvx']
-    machineStrings = ['GearConcaveMachineSettings', 'GearConvexMachineSettings', 'PinionConcaveMachineSettings', 'PinionConvexMachineSettings']
-    subMachineStrings = ['gearCnv', 'gearCvx', 'pinCnv', 'pinCvx']
 
     SystemData = {
         'HAND': 0,
@@ -453,7 +470,7 @@ def main():
     import time 
 
     for ii in range(0,4):
-        subprocess.Popen(["notepad.exe"], shell=True) 
+        subprocess.Popen(["python.exe"], shell=True) 
 
 if __name__ == '__main__':
     main()

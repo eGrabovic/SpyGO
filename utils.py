@@ -43,7 +43,6 @@ def IPOPT_global_options():
     options = {
         'ipopt': {
             'max_iter': 3000,
-            'error_on_fail': False,
             # 'nlp_scaling_method': 'none',
             'linear_solver': 'mumps', # 'ma57',
             'ma57_pre_alloc': 10,
@@ -61,11 +60,14 @@ def IPOPT_global_options():
             # 'warm_start_init_point': 'yes',
             # 'mu_init': 1e-3,
             # 'mu_oracle': 'probing',
-            'alpha_for_y': 'min-dual-infeas',
+            'alpha_for_y': 'primal',
             'mu_strategy': 'adaptive', # 'adaptive'; % 'monotone'; %
-            'adaptive_mu_globalization': 'never-monotone-mode'
+            'adaptive_mu_globalization': 'never-monotone-mode',
+            'min_refinement_steps': 20,
+            'max_refinement_steps' : 30
             },
-        'print_time': 0
+        'print_time': 0,
+        'error_on_fail': False
         }
     return options
 

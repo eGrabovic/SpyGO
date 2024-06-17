@@ -7,6 +7,10 @@ from math import sqrt, pi, atan, cos, sin, acos, asin, tan
 from utils import *
 from hypoid_utils import *
 
+"""
+This package encloses the basic functions related to the gleason's facemilling hypoid generator kinematics.
+It contains cradle-style (9 DOF) kinematic functions and gridning wheel (tool) geometry functions."""
+
 def gear_tool_kinem(joint_values):
 
     ggt0 = np.array([[0, 0, -1, 0],
@@ -90,7 +94,9 @@ def gear_tool_twist_spatial(joint_values, joint_vel):
     return sc.hat(J@q_dot)
 
 def machine_kinematics(machineParMatrix):
-    
+    """
+    Numeric function that builds the homogeneous transorm function and the spatial twists, given a set of machine settings
+    """
     # kinematic map
     ggt = lambda phi: gear_tool_kinem ( 
         machineParMatrix @ np.array([1,phi,phi**2,phi**3,phi**4,phi**5,phi**6,phi**7])
@@ -109,6 +115,9 @@ def machine_kinematics(machineParMatrix):
     return ggt, Vgt_body, Vgt_spatial
 
 def casadi_machine_kinematics(member, systemHand, casadi_type = 'SX'):
+    """
+    Casadi variant of the machine_kinematics function. It allows to define the kinematic map with symbolic machine settings
+    """
     casadi_var = getattr(ca, casadi_type)
     machine_matrix = casadi_var.sym('M', 9, 8)
     auxiliary_mat = machine_matrix
@@ -128,6 +137,7 @@ def casadi_machine_kinematics(member, systemHand, casadi_type = 'SX'):
     return ggt, Vgt, Vgt_spatial
 
 def tool_casadi_blade(flank, settings):
+    
     # reading parameter settings
     Rp = settings[0]  # point radius
     rho = settings[1]  # spherical radius
@@ -462,14 +472,21 @@ def casadi_tool_fun(flank, toprem = None, flankrem = None, casadi_type = 'SX'):
     L_fun = ca.Function('p',  [tool_settings], [L])
     return p_fun, n_fun, L_fun
 
-def parametric_tool_casadi():
-    return
+def parametric_tool_casadi(flank, Rp, RHO, alpha, edgeRadius, csi, theta):
+    [pTool, nTool, L] = casadi_tool_fun(flank, toprem = None, flankrem = None)
+    toolvec = np.array([Rp, RHO, edgeRadius, 9000, 9000, alpha, 100, 0, 0, 0])
+    point = pTool(toolvec, np.array([csi,theta]))
+    normal = nTool(toolvec, np.array([csi, theta]))
+    return point, normal
 
 def main():
     toolvec = [50, 150, 1, 0, 300, 20, 0, 0, 0, 0]
     p_fun, n_fun, L_fun = casadi_tool_fun('concave', None, None, 'SX')
     print(p_fun(toolvec, np.array([[1,0], [1,0]])))
-    print(n_fun(toolvec, np.array([1,1])))
+    print(n_fun(toolvec, np.array([[1,0], [1,0]])))
+    pp, nn = parametric_tool_casadi('concave', toolvec[0], toolvec[1], toolvec[5], toolvec[2], 1, 1)
+    print(pp.full())
+
 if __name__ == '__main__':
     main()
 
