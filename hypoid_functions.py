@@ -78,25 +78,24 @@ def approxToolIdentification_casadi(data, member, RHO = None):
     ggt, Vgt, Vgt_spatial = machine_kinematics(machineParMatrix)
 
     triplet = initial_guess_from_data(data, member, 'convex')
-    csiguessCVX = mmn*2
+    csiguessCVX = mmn*1.5
     thetaguessCVX = triplet[1]
     phiguessCVX = triplet[2]
     triplet = initial_guess_from_data(data, member, 'concave')
-    csiguessCNV = mmn*2
+    csiguessCNV = mmn*1.5
     thetaguessCNV = triplet[1]
     phiguessCNV = triplet[2]
-
-    x0 = [rc0-t, pressAngCvx, pressAngCnv, csiguessCNV, thetaguessCNV, csiguessCVX, thetaguessCVX, csiguessCNV, thetaguessCNV, csiguessCVX, thetaguessCVX,\
-    rotguess, phiguessCNV, phiguessCVX, phiguessCNV, phiguessCVX, rc0+t]
-    csiLow = mmn*0.1
-    csiMax = mmn
-    lb = [x0[0]-rc0/4, x0[1] - 10, x0[2] - 10, csiLow, x0[4] - pi/2, csiLow, x0[6] - pi/2, csiLow, x0[8] - pi/2, csiLow, x0[10] - pi/2, x0[11] - 5*pi/nT, x0[12] - pi/2, x0[13] - pi/2, x0[14] - pi/2, x0[15] - pi/2, x0[16]-rc0/4]
-    ub = [x0[0]+rc0/4, x0[1] + 10, x0[2] + 10, x0[3] + csiMax, x0[4] + pi/2, x0[5] + csiMax , x0[6] + pi/2, x0[7] + csiMax, x0[8] + pi/2, x0[9] + csiMax, x0[10] + pi/2, x0[11] + 5*pi/nT, x0[12] + pi/2, x0[13] + pi/2, x0[14] + pi/2, x0[15] + pi/2, x0[16]+rc0/4]
+    x0 = [rc0, pressAngCvx*1.2, pressAngCnv, csiguessCNV, thetaguessCNV, csiguessCVX, thetaguessCVX, csiguessCNV, thetaguessCNV, csiguessCVX, thetaguessCVX,\
+    rotguess, phiguessCNV, phiguessCVX, phiguessCNV, phiguessCVX, rc0]
+    csiLow = mmn/300
+    csiMax = mmn*4
+    lb = [x0[0]-rc0/4, x0[1] - 5, x0[2] - 10, csiLow, x0[4] - pi, csiLow, x0[6] - pi, csiLow, x0[8] - pi, csiLow, x0[10] - pi, x0[11] - 3*pi/nT, x0[12] - pi, x0[13] - pi, x0[14] - pi, x0[15] - pi, x0[16]-rc0/4]
+    ub = [x0[0]+rc0/4, x0[1] + 5, x0[2] + 10, x0[3] + csiMax, x0[4] + pi, x0[5] + csiMax , x0[6] + pi, x0[7] + csiMax, x0[8] + pi, x0[9] + csiMax, x0[10] + pi, x0[11] + 3*pi/nT, x0[12] + pi, x0[13] + pi, x0[14] + pi, x0[15] + pi, x0[16]+rc0/4]
     lb = np.array(lb)
     ub = np.array(ub)
     x0 = np.array(x0)
 
-    x_unscaled = ca.SX.sym('x', 17+3*4+3*4, 1)
+    x_unscaled = ca.SX.sym('x', 17, 1) #+3*4+3*4
     x = x_unscaled * (ub - lb) + lb
     Rpcvx = x[0]
     alphacvx = x[1]
@@ -115,14 +114,14 @@ def approxToolIdentification_casadi(data, member, RHO = None):
     phiEnvI = x[14]
     phiEnvO = x[15]
     Rpcnv = x[16]
-    pO = x[17:20]
-    pI = x[20:23]
-    pOp = x[23:26]
-    pIp = x[26:29]
-    nO = x[17:20]
-    nI = x[20:23]
-    nOp = x[23:26]
-    nIp = x[26:29]
+    # pO = x[17:20]
+    # pI = x[20:23]
+    # pOp = x[23:26]
+    # pIp = x[26:29]
+    # nO = x[17:20]
+    # nI = x[20:23]
+    # nOp = x[23:26]
+    # nIp = x[26:29]
 
     toolO, toolNO = parametric_tool_casadi('convex', Rpcvx, RHO, alphacvx, edgeRadius, csiO, thetaO)
     toolI, toolNI = parametric_tool_casadi('concave', Rpcnv, RHO, alphacnv, edgeRadius, csiI, thetaI)
@@ -144,27 +143,27 @@ def approxToolIdentification_casadi(data, member, RHO = None):
     normalIprime = T @ normalIprime
 
     out = ca.SX(17, 1)
-    out[0:3] = (pO - np.array([-(hamc - ham), +signThick * t / 2, 0]))
-    out[3:6] = (pI - np.array([-(hamc - ham), -signThick * t / 2, 0]))
-    out[6] = pOp[2]
-    out[7] = pOp[0] * nOp[1] - pOp[1] * nOp[0]
+    out[0:3] = (pointO[0:3] - np.array([-(hamc - ham), +signThick * t / 2, 0]))
+    out[3:6] = (pointI[0:3] - np.array([-(hamc - ham), -signThick * t / 2, 0]))
+    out[6] = pointOprime[2]
+    out[7] = pointOprime[0] * normalOprime[1] - pointOprime[1] * normalOprime[0]
     out[8] = ca.cos(pressAngCvx*pi/180) * ca.sqrt(normalOprime[0]**2 + normalOprime[1]**2) + signThick * normalOprime[1]
-    out[9] = pIp[2]
-    out[10] = pIp[0] * nIp[1] - pIp[1] * nIp[0]
+    out[9] = pointIprime[2]
+    out[10] = pointIprime[0] * normalIprime[1] - pointIprime[1] * normalIprime[0]
     out[11] = ca.cos(pressAngCnv*pi/180) * ca.sqrt(normalIprime[0]**2 + normalIprime[1]**2) - signThick * normalIprime[1]
     out[12] = ca.vertcat(toolNOprime, 1).T @ Vgt(phiEnvOprime) @ ca.vertcat(toolOprime, 1)
     out[13] = ca.vertcat(toolNIprime, 1).T @ Vgt(phiEnvIprime) @ ca.vertcat(toolIprime, 1)
     out[14] = ca.vertcat(toolNO, 1).T @ Vgt(phiEnvO) @ ca.vertcat(toolO, 1)
     out[15] = ca.vertcat(toolNI, 1).T @ Vgt(phiEnvI) @ ca.vertcat(toolI, 1)
     out[16] = Rpcnv - (2 * rc0 - Rpcvx)
-    out[17:20] = pO-pointO[0:3]
-    out[17:20] = pI-pointI[0:3]
-    out[17:20] = pOp-pointOprime[0:3]
-    out[17:20] = pIp-pointIprime[0:3]
-    out[17:20] = nOp-pointOprime[0:3]
-    out[17:20] = nIp-pointIprime[0:3]
+    # out[17:20] = pO-pointO[0:3]
+    # out[17:20] = pI-pointI[0:3]
+    # out[17:20] = pOp-pointOprime[0:3]
+    # out[17:20] = pIp-pointIprime[0:3]
+    # out[17:20] = nOp-pointOprime[0:3]
+    # out[17:20] = nIp-pointIprime[0:3]
 
-    fun_test = ca.Function('ft', [x_unscaled], [sqrt(normalOprime[0]**2 + normalOprime[1]**2)])
+    fun_test = ca.Function('ft', [x_unscaled], [out])
     opts = IPOPT_global_options()
     problem = {'x': x_unscaled, 'g': out, 'f': 0}
     solver = ca.nlpsol('S', 'ipopt', problem, opts)
@@ -191,6 +190,7 @@ def approxToolIdentification_casadi(data, member, RHO = None):
 
 def AGMAcomputationHypoid(Hand, taper, initialConeData, toothInitialData, Method = 1, rc0 = None, GearGenType = "Generated"):
     
+    rc0Flag = True
     if rc0 is None or rc0 is np.nan:
         rc0 = 0
         rc0Flag = None
@@ -274,7 +274,8 @@ def AGMAcomputationHypoid(Hand, taper, initialConeData, toothInitialData, Method
         # limit pressure angle
         alphalim = lambda ni: atan( -tan(delta1(ni))*tan(delta2(ni))/cos(eps1prime(ni))*( (Rm1(ni)*sin(betam1(ni)) - Rm2(ni)*sin(betam2(ni))) / (Rm1(ni)*tan(delta1(ni)) + Rm2(ni)*tan(delta2(ni))) ) ) 
 
-        rc0 = lambda ni: rc0 # user assigned rc0 value
+        rc0_user = rc0
+        rc0 = lambda ni: rc0_user # user assigned rc0 value
 
         # else use suggested mean cutter radius if user didn't specify any
         if rc0Flag == None:
@@ -293,7 +294,8 @@ def AGMAcomputationHypoid(Hand, taper, initialConeData, toothInitialData, Method
         rholim = lambda ni: 1/cos(alphalim(ni))*(tan(betam1(ni)) - tan(betam2(ni)))/(-tan(alphalim(ni))*(tan(betam1(ni))/(Rm1(ni)*tan(delta1(ni))) + tan(betam2(ni))/(Rm2(ni)*tan(delta2(ni)))) + 1/(Rm1(ni)*cos(betam1(ni))) - 1/(Rm2(ni)*cos(betam2(ni))))
 
         Delta = lambda ni: abs(rhombeta(ni)/rholim(ni) - 1)
-        ni = ni0
+        ni = 0.0875
+        #ni0
         if Delta(ni0) > 0.01: # check if ni0 value satisfies the constraints
             Delta = lambda ni: abs(rhombeta(ni)/rholim(ni) - 1) - 0.005
             ni, opts , flag, msg = fsolve(Delta, ni0, full_output = True)
@@ -784,16 +786,15 @@ def main():
         'thetaf2' : None
     }
 
-    data = AGMAcomputationHypoid(SystemData['HAND'], SystemData['taper'], coneData, toothData)
+    data = AGMAcomputationHypoid(SystemData['HAND'], SystemData['taper'], coneData, toothData, rc0 = coneData['rc0'])
     data = shaftSegmentComputation(data)
     data["GearCommonData"]["GearGenType"] = 'generated'
     gearBlank = assignBlankPar(data, 'gear')
-    pinionBlank = assignBlankPar(data, 'pinion')
-    dictprint(data)        
+    pinionBlank = assignBlankPar(data, 'pinion')    
     print(gearBlank)
     print(pinionBlank)  
     data, trpl_cnv, trpl_cvx = approxToolIdentification_casadi(data, 'gear', RHO = 500)
-    data, trpl_cnv, trpl_cvx = approxToolIdentification_casadi(data, 'pinion', RHO = 500)
+    data, trpl_cnv, trpl_cvx = approxToolIdentification_casadi(data, 'pinion', RHO = 50000)
     print(trpl_cnv, trpl_cvx)
     dictprint(data)
     return

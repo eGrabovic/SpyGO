@@ -342,8 +342,9 @@ def tool_casadi(flank, settings, topremCheck = True):
     
     def pointsCoNcave(csi, theta):
         bool1 = csi < end1
-        bool2 = (csi >= end1) & (csi < end2)
-        bool3 = (csi >= end2) & (csi < end3)
+        bool2 = ca.logic_and((csi >= end1), (csi < end2))
+        bool3 = ca.logic_and((csi >= end2), (csi < end3))
+
         bool4 = csi >= end3
         
         angle = bool1 * (csi / rhof) + \
@@ -351,18 +352,18 @@ def tool_casadi(flank, settings, topremCheck = True):
                 bool3 * ((csi - end2) / rho + theta_iniz_blade) + \
                 bool4 * ((csi - end3) / rhoflank + theta_iniz_flank)
         
-        sa = np.sin(angle)
-        ca = np.cos(angle)
+        sang = np.sin(angle)
+        cang = np.cos(angle)
         
-        Xtoolcurv = bool1 * (Xf + rhof * sa) + \
-            bool2 * (Cxtop - rhotop * ca) + \
-            bool3 * (Cxblade - rho * ca) + \
-            bool4 * (Cxflank - rhoflank * ca)
+        Xtoolcurv = bool1 * (Xf + rhof * sang) + \
+            bool2 * (Cxtop - rhotop * cang) + \
+            bool3 * (Cxblade - rho * cang) + \
+            bool4 * (Cxflank - rhoflank * cang)
         
-        Ztoolcurv = bool1 * (rhof * (ca - 1)) + \
-            bool2 * (Cztop - rhotop * sa) + \
-            bool3 * (Czblade - rho * sa) + \
-            bool4 * (Czflank - rhoflank * sa)
+        Ztoolcurv = bool1 * (rhof * (cang - 1)) + \
+            bool2 * (Cztop - rhotop * sang) + \
+            bool3 * (Czblade - rho * sang) + \
+            bool4 * (Czflank - rhoflank * sang)
         
         Xtool = Xtoolcurv * np.cos(theta)
         Ytool = Xtoolcurv * np.sin(theta)
@@ -372,8 +373,8 @@ def tool_casadi(flank, settings, topremCheck = True):
     
     def normalsCoNcave(csi, theta):
         bool1 = csi < end1
-        bool2 = (csi >= end1) & (csi < end2)
-        bool3 = (csi >= end2) & (csi < end3)
+        bool2 = ca.logic_and((csi >= end1), (csi < end2))
+        bool3 = ca.logic_and((csi >= end2), (csi < end3))
         bool4 = csi >= end3
         boolTip = (csi >= end1)
         
@@ -382,14 +383,14 @@ def tool_casadi(flank, settings, topremCheck = True):
                 bool3 * ((csi - end2) / rho + theta_iniz_blade) + \
                 bool4 * ((csi - end3) / rhoflank + theta_iniz_flank)
         
-        sa = np.sin(angle)
-        ca = np.cos(angle)
+        sang = np.sin(angle)
+        cang = np.cos(angle)
         
-        nXtoolcurv = bool1 * (sa) + \
-                     boolTip * (ca)
+        nXtoolcurv = bool1 * (sang) + \
+                     boolTip * (cang)
         
-        nZtoolcurv = bool1 * (ca) + \
-                     boolTip * (sa)
+        nZtoolcurv = bool1 * (cang) + \
+                     boolTip * (sang)
         
         nXtool = nXtoolcurv * np.cos(theta)
         nYtool = nXtoolcurv * np.sin(theta)
@@ -399,8 +400,8 @@ def tool_casadi(flank, settings, topremCheck = True):
     
     def pointsConveX(csi, theta):
         bool1 = csi < end1
-        bool2 = (csi >= end1) & (csi < end2)
-        bool3 = (csi >= end2) & (csi < end3)
+        bool2 = ca.logic_and((csi >= end1), (csi < end2))
+        bool3 = ca.logic_and((csi >= end2), (csi < end3))
         bool4 = csi >= end3
         
         angle = bool1 * (csi / rhof) + \
@@ -408,18 +409,18 @@ def tool_casadi(flank, settings, topremCheck = True):
                 bool3 * ((csi - end2) / rho + theta_iniz_blade) + \
                 bool4 * ((csi - end3) / rhoflank + theta_iniz_flank)
         
-        sa = np.sin(angle)
-        ca = np.cos(angle)
+        sang = np.sin(angle)
+        cang = np.cos(angle)
         
-        Xtoolcurv = bool1 * (Xf - rhof * sa) + \
-            bool2 * (Cxtop + rhotop * ca) + \
-            bool3 * (Cxblade + rho * ca) + \
-            bool4 * (Cxflank + rhoflank * ca)
+        Xtoolcurv = bool1 * (Xf - rhof * sang) + \
+            bool2 * (Cxtop + rhotop * cang) + \
+            bool3 * (Cxblade + rho * cang) + \
+            bool4 * (Cxflank + rhoflank * cang)
         
-        Ztoolcurv = bool1 * (rhof * (ca - 1)) + \
-            bool2 * (Cztop - rhotop * sa) + \
-            bool3 * (Czblade - rho * sa) + \
-            bool4 * (Czflank - rhoflank * sa)
+        Ztoolcurv = bool1 * (rhof * (cang - 1)) + \
+            bool2 * (Cztop - rhotop * sang) + \
+            bool3 * (Czblade - rho * sang) + \
+            bool4 * (Czflank - rhoflank * sang)
         
         Xtool = Xtoolcurv * np.cos(theta)
         Ytool = Xtoolcurv * np.sin(theta)
@@ -429,8 +430,8 @@ def tool_casadi(flank, settings, topremCheck = True):
     
     def normalsConveX(csi, theta):
         bool1 = csi < end1
-        bool2 = (csi >= end1) & (csi < end2)
-        bool3 = (csi >= end2) & (csi < end3)
+        bool2 = ca.logic_and((csi >= end1), (csi < end2))
+        bool3 = ca.logic_and((csi >= end2), (csi < end3))
         bool4 = csi >= end3
         boolTip = (csi >= end1)
         
@@ -439,14 +440,14 @@ def tool_casadi(flank, settings, topremCheck = True):
                 bool3 * ((csi - end2) / rho + theta_iniz_blade) + \
                 bool4 * ((csi - end3) / rhoflank + theta_iniz_flank)
         
-        sa = np.sin(angle)
-        ca = np.cos(angle)
+        sang = np.sin(angle)
+        cang = np.cos(angle)
         
-        nXtoolcurv = bool1 * (-sa) + \
-                     boolTip * (-ca)
+        nXtoolcurv = bool1 * (-sang) + \
+                     boolTip * (-cang)
         
-        nZtoolcurv = bool1 * (ca) + \
-                     boolTip * (sa)
+        nZtoolcurv = bool1 * (cang) + \
+                     boolTip * (sang)
         
         nXtool = nXtoolcurv * np.cos(theta)
         nYtool = nXtoolcurv * np.sin(theta)

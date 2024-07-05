@@ -44,6 +44,7 @@ def get_data_field_names(member, flank, fields = 'all'):
 def assignMachinePar(data, member, flank):
 
     mainFieldName, subFieldName = get_data_field_names(member, flank, fields = 'machine')
+    common_field, sub_common_field = get_data_field_names(member, flank, fields = 'common')
 
     S0    = data[mainFieldName][f'{subFieldName}RADIALSETTING']
     sig0  = data[mainFieldName][f'{subFieldName}TILTANGLE']
@@ -79,7 +80,7 @@ def assignMachinePar(data, member, flank):
     S5    = data[mainFieldName][f'{subFieldName}R5']
     S6    = data[mainFieldName][f'{subFieldName}R6']
 
-    if member.lower() == 'gear' and data['GearCommonData']['GearGenType'].lower() == 'formate':
+    if member.lower() == 'gear' and data[common_field][f'{sub_common_field}GenType'].lower() == 'formate':
         H = data[mainFieldName][f'{subFieldName}Horizontal']
         V = data[mainFieldName][f'{subFieldName}Vertical']
         q0 = atan(V/H)
@@ -128,7 +129,7 @@ def manageMachinePar(member, systemHand, mode = 'gleason'):
 
     # sign settings
 
-    if member.lower == 'pinion':
+    if member.lower() == 'pinion':
         if systemHand.lower() == 'left':
             signMat = np.array([
                 [+1, +1, +1, +1, +1, +1, +1, +1], # R radial motion
@@ -143,12 +144,12 @@ def manageMachinePar(member, systemHand, mode = 'gleason'):
                 ])
         else: # right hand
             signMat = np.array([
-                [+1, +1, +1, -1, +1, +1, +1, +1],
                 [+1, +1, +1, +1, +1, +1, +1, +1],
                 [+1, +1, +1, +1, +1, +1, +1, +1],
-                [+1, +1, -1, +1, -1, +1, +1, +1],
-                [+1, -1, +1, -1, +1, -1, +1, -1],
-                [-1, +1, +1, +1, +1, +1, +1, +1],
+                [+1, +1, +1, +1, +1, +1, +1, +1],
+                [-1, -1, -1, -1, -1, -1, -1, -1],
+                [+1, -1, +1, -1, +1, -1, +1, +1],
+                [+1, +1, +1, +1, +1, +1, +1, +1],
                 [+1, +1, +1, -1, +1, -1, +1, -1],
                 [+1, +1, +1, +1, +1, +1, +1, +1],
                 [+1, +1, +1, +1 ,+1, +1, +1, +1]
@@ -184,6 +185,8 @@ def assignBlankPar(data, member):
     _, _, commonFieldName, subCommonFieldName,\
            machineFieldName, subMachineFieldName = get_data_field_names(member, 'concave')
     
+    c_mat, s_mat = manageMachinePar(member, data['SystemData']['HAND'])
+
     A0 = data[commonFieldName][f'{subCommonFieldName}OUTERCONEDIST']
     Fw = data[commonFieldName][f'{subCommonFieldName}FACEWIDTH']
     beta = data[commonFieldName][f'{subCommonFieldName}SPIRALANGLE']
@@ -209,12 +212,18 @@ def assignBlankPar(data, member):
     dba = data[commonFieldName][f'{subCommonFieldName}BASECONEAPEX']
     
     RA = data[commonFieldName][f'{subCommonFieldName}ShaftRA']
-    
+    deltaf = deltaf*pi/180
+    deltab = deltab*pi/180
+    gammaP = gammaP*pi/180
+    gammaF = gammaF*pi/180
+    gammaR = gammaR*c_mat[8, 0]*s_mat[8, 0]
+    gammaB = gammaB*pi/180
+    beta = beta*pi/180 
     return (A0, Fw, beta, deltaf, deltab, gammaP, dpa, gammaF, dfa, gammaR, dra, gammaB, dba, RA)
 
 def assignToolPar(data, member, flank, stfFlank = None):
     
-    alphaFlank = None
+    alphaFlank = 0
     rho_straight = 2e6
     cutterFieldName, subCutterFieldName, _, _, machineFieldName, subMachineFieldName =\
           get_data_field_names(member, flank)
@@ -459,8 +468,7 @@ def initialize_design_data(): # return designData
 
     return designData
 
-
-def main():
+def main(): # debug main function
     # designData = initialize_design_data()
     # dictprint(designData)
     # filename = r'C:\Users\egrab\Desktop\designData.txt'

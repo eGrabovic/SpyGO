@@ -654,5 +654,7 @@ def main():
 
 
 if __name__ == "__main__":
-    T = ca.SX.sym('T', 6, 1)
-    print(ad(T))
+    x = ca.SX.sym('x', 1, 1)
+    expr = (ca.logic_and((x>=0), (x<2)))*5 + (x<0)*2
+    print(expr)
+    

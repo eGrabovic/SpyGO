@@ -3,6 +3,8 @@ import numpy as np
 import casadi as ca
 import screwCalculus as sc
 from hypoid_functions import *
+from hypoid_utils import *
+from hypoid_sampling import *
 
 class Hypoid:
 
@@ -74,22 +76,79 @@ class Hypoid:
         self.LTCA = {}  # LTCA data structure
 
         # call constructor
-        self.constructHypoid()
+        input = 'designData'
+        if toothData is not None:
+            input = 'coneData'
+        self.constructHypoid(designData = designData, toothData = toothData, coneData = coneData, inputData = input)
 
     ## end of class constructor
 
     @staticmethod
     def conesIntersection(cone1, cone2):
-        return
+        Ar = cone1[0]
+        Az = cone1[1]
+        B = cone1[2]
+
+        Ar2 = cone2[0]
+        Az2 = cone2[1]
+        B2 = cone2[2]
+
+        R = (Az2/Az*B - B2)/(Ar2 - Az2/Az*Ar)
+        z = -(B+Ar*R)/Az
+
+        zR = [z, R]
+        return zR
+    
     @staticmethod
     def EPGalphaToFrames(EPGalpha, data):
-        return
+        """
+        EPGalpha misalignments converted to frame displacements and z axis orientation
+        """
+        handPin = data['SystemData']['HAND']
+        shaft_angle = data['SystemData']['shaft_angle']
+        signOffset = -(int(handPin.lower() == 'right') - int(handPin.lower() == 'left'))
+        offset = data['SystemData']['hypoidOffset']
+        pin_dict = {}
+        gear_dict = {}
+        pin_dict['originXYZ'] = [EPGalpha[1], signOffset*(offset + EPGalpha[0]), 0]
+        pin_dict['Zdir'] = [sin(shaft_angle*pi/180 + EPGalpha[3]), 0, cos(shaft_angle*pi/180 + EPGalpha[3])]
+        gear_dict['originXYZ'] = [0, 0, EPGalpha[2]]
+        gear_dict['Zdir'] = [0, 0, 1]
+        return pin_dict, gear_dict
+    
     @staticmethod
     def sideFromMemberAndFlank(member, flank):
-        return
+        side = 'coast'
+        if (member.lower() == 'pinion' and flank.lower() == 'concave') or (member.lower() == 'gear' and flank.lower() == 'convex'):
+            side = 'drive'
+        return side
+    
+    @staticmethod
+    def flankFromMemberAndSide(member, side):
+        flank = 'convex'
+        if (side.lower() == 'drive' and member.lower() == 'pinion') or (side.lower() == 'coast' and member.lower() == 'gear'):
+            flank = 'concave'
+        return flank
+    
     @staticmethod
     def getIndexArray():
-        return
+        """
+        sequential order of the machine-tool settings
+        """
+        indexes = [
+                1, 10, 19, 28, 37, 46, 55, 64, # 1
+                2, 11, 20, 29, 38, 47, 56, 65, # 9
+                3, 12, 21, 30, 39, 48, 57, 66,# 17
+                4, 13, 22, 31, 40, 49, 58, 67,# 25
+                5, 14, 23, 32, 41, 50, 59, 68,# 33
+                6, 15, 24, 33, 42, 51, 60, 69,# 41
+                16, 25, 34, 43, 52, 61, 70,# 48
+                8, 17, 26, 35, 44, 53, 62, 71,# 56
+                9, 18, 27, 36, 45, 54, 63, # 64
+                72, 73, 74, 75, 76, 77, 78, 79, 80, 81, # concave tool
+                82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92 # convex tool
+                ]
+        return indexes
     
     def constructHypoid(self, designData = None, toothData = None, coneData = None, gearGenType = 'Generated', EPGalpha = np.zeros((4,1)), inputData = "designData"):
         self.initialCone = coneData
@@ -98,11 +157,10 @@ class Hypoid:
         if inputData.lower() != "designData".lower():
             systemData = designData
 
+            method = 1
             if systemData["hypoidOffset"] == 0:
                 method = 0
-            else:
-                method = 1
-            
+
             self.designData = AGMAcomputationHypoid(systemData["HAND"], 
                                                     systemData["taper"],
                                                     coneData, toothData,
@@ -111,11 +169,44 @@ class Hypoid:
                                                     Method = method)
             
             self.designData = shaftSegmentComputation(self.designData)
-            self.designData, tiplets_pin_CNV, triplets_pin_CVX = approxToolIdentification_casadi(self.designData, 'Pinion', RHO = 90000)
-            self.designData, triplets_gear_CNV, triplets_gear_CVX = approxToolIdentification_casadi(self.designData, 'Gear'  , RHO = 750)
+            self.designData, triplets_pin_CNV, triplets_pin_CVX = approxToolIdentification_casadi(self.designData, 'Pinion', RHO = 50000)
+            self.designData, triplets_gear_CNV, triplets_gear_CVX = approxToolIdentification_casadi(self.designData, 'Gear'  , RHO = 500)
+            setattr(self, 'init_triplet', {
+                'pinion':
+                                            {
+                                                'concave': triplets_pin_CNV,
+                                                'convex' : triplets_pin_CVX
+                                            },
+                                            'gear':
+                                            {
+                                                'concave':triplets_gear_CNV,
+                                                'convex':triplets_gear_CVX
+                                            }
+                                          }
+                    )
         
         return 
+    
+    def sampleSurface(self, member, flank, sampling_size = None, extend_tip = False):
         
+        side = self.sideFromMemberAndFlank(member, flank)
+        data = self.designData
+
+        # extract the sampling size (face, profile and fillet points)
+        nF = self.nFace; nP = self.nProf; nfil = self.nFillet
+        if sampling_size is not None:
+            nF = sampling_size[0];  nP = sampling_size[1];  nfil = sampling_size[2]
+        
+        if extend_tip:
+            common, subcommon = get_data_field_names(member, flank, fields = 'common')
+            data[common][f'{subcommon}FACEAPEX'] = data[common][f'{subcommon}FACEAPEX'] + 1
+            data[common][f'{subcommon}OUTERCONEDIST'] = data[common][f'{subcommon}OUTERCONEDIST'] + 0.3
+            data[common][f'{subcommon}FACEWIDTH'] = data[common][f'{subcommon}FACEWIDTH'] + 0.6
+        
+        p, n, p_tool, n_tool, csi_theta_phi, z_tool, p_fillet, p_root, n_root, root_variables, p_bounds, nbounds =\
+              surface_sampling_casadi(data, member, flank, [nF, nP, nfil], triplet_guess = None, spreadblade = False)
+        return
+
     def computeParameters(self):
         return
     
@@ -157,12 +248,43 @@ class MyClass:
     
     
 def main():
-    # class1 = MyClass(1,2,3)
-    # class1.fun()
-    # class1.print()
-    designData = {'systemData':{'a':1,'tau': 2}}
-    print(designData)
-    
+    SystemData = {
+        'HAND': "Right",
+        'taper' : "Standard",
+        'hypoidOffset' : 25
+    }
+
+    coneData = {
+        'SIGMA' : 90,
+        'a' : SystemData['hypoidOffset'],
+        'z1' : 9,
+        'u' : 3.7,
+        'de2': 225,
+        'b2' : 38.8,
+        'betam1' : 45,
+        'rc0' : 75,
+        'gearBaseThick' : 15,
+        'pinBaseThick' : 8,
+    }
+
+    coneData['z2'] = round(coneData['u']*coneData['z1'])
+    coneData['u'] = coneData['z2']/coneData['z1']
+
+    toothData = {
+        'alphaD' : 21,
+        'alphaC' : 20,
+        'falphalim' : 1,
+        'khap' : 1,
+        'khfp' : 1.25,
+        'xhm1' : 0.45,
+        'jen' : 0.1,
+        'xsmn' : 0.05,
+        'thetaa2' : None,
+        'thetaf2' : None
+    }
+    H = Hypoid(SystemData, toothData, coneData)
+    H.sampleSurface('pinion', 'concave')
+    return
     
 if __name__ == "__main__":
     main()

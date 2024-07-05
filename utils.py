@@ -1,4 +1,5 @@
 import ctypes
+import numpy as np
 
 def flatten(t):
     return [item for sublist in t for item in sublist]
@@ -7,6 +8,9 @@ def chop(value, tol):
     return round(value/tol)*tol
 
 def dictprint(dictionary, tabstring = ''):
+    """
+    function to print the content of a dictionary to the command window. It recursively prints also nested dictionaries adding indentation tabs.
+    """
     for key,value in dictionary.items():
         if type(value) is dict:
             tabstring = '   '
@@ -18,6 +22,13 @@ def dictprint(dictionary, tabstring = ''):
     return
 
 def dict_to_file(dictionary, filename, tabstring = '', w = True):
+    """
+    output_string = dict_to_file(dictionary, filename, tabstring = '', w = True)
+    function to print the content of a dictionary to a txt file. It recursively prints also nested dictionaries adding indentation tabs.
+    if option w is set to False the content won't be printed to a file but the output string can be returned and used.
+    tabstring option shall not be used by the end user.
+    """
+
     output_string = str()
     for key,value in dictionary.items():
         if type(value) is dict:
@@ -39,7 +50,9 @@ def msgbox(text, title = 'Title', style = 0):
     return ctypes.windll.user32.MessageBoxW(0, text, title, style)
 
 def IPOPT_global_options():
-
+    """
+    default set for the IPOPT options ready to use
+    """
     options = {
         'ipopt': {
             'max_iter': 3000,
@@ -71,6 +84,8 @@ def IPOPT_global_options():
         }
     return options
 
+def reduce_2d(x):
+    return x.reshape(x[0], -1, order = 'F')
 
 def main():
     tabstring = ''
