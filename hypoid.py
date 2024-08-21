@@ -24,34 +24,37 @@ class Hypoid:
         self.designData = {}
 
         # sampling data
-        self.surfPoints = []
-        self.surfNormals = []
-        self.surfTriplets = []
-        self.filletPoints = []
-        self.interpTriplets = []
-        self.surfcurvature = []
-        self.eqMeshing = []
-        self.Point = []   # casadi function
-        self.Normal = [] # casadi function
-        self.pointsFullBounds = []
-        self.normalsFullBounds = []
+        template_dictionary = {'pinion' : {'concave':[], 'convex':[]}, 'gear': {'concave':[], 'convex':[]}}
+        self.surfPoints = template_dictionary
+        self.surfNormals = template_dictionary
+        self.surfTriplets = template_dictionary
+        self.filletPoints = template_dictionary
+        self.interpTriplets = template_dictionary
+        self.surfcurvature = template_dictionary
+        self.eqMeshing = template_dictionary
+        self.Point = template_dictionary   # casadi function
+        self.Normal = template_dictionary # casadi function
+        self.pointsFullBounds = template_dictionary
+        self.normalsFullBounds = template_dictionary
 
         # nurbs output
-        self.nurbsFit = []
+        template_dictionary = {'pinion' : {'concave':[], 'convex':[], 'both': []}, 'gear': {'concave':[], 'convex':[], 'both': []}}
+        self.nurbsFit = template_dictionary
 
         # zR tooth data boundaries
-        self.zRfillet = []
-        self.zRfillet = []                    # flank-fillet transition line in axial plane
-        self.zRfullvec = []                   # z - R coordinates in array form derived from sampling points (nProf + nFillet)xnFace
-        self.zRbounds = []                    # bounds on flank fillet transition
-        self.zRwithRoot = []                  # bounds with the fillet
-        self.zRrootTriplets = []              # triplets for the rootcone sampling
-        self.zRfullBounds = []
-        self.zRPCA = []
-        self.zRinOther = []
-        self.zRinOtherCorners = []
-        self.zRtipOther = []
-        self.rootLineStruct = [] 
+        template_dictionary = {'pinion' : {'concave':[], 'convex':[]}, 'gear': {'concave':[], 'convex':[]}}
+        self.zRfillet = template_dictionary
+        self.zRfillet = template_dictionary                   # flank-fillet transition line in axial plane
+        self.zRfullvec = template_dictionary                   # z - R coordinates in array form derived from sampling points (nProf + nFillet)xnFace
+        self.zRbounds = template_dictionary                   # bounds on flank fillet transition
+        self.zRwithRoot = {'pinion':[], 'gear':[]}                  # bounds with the fillet
+        self.zRrootTriplets = template_dictionary              # triplets for the rootcone sampling
+        self.zRfullBounds = template_dictionary
+        self.zRPCA = template_dictionary
+        self.zRinOther = template_dictionary
+        self.zRinOtherCorners = template_dictionary
+        self.zRtipOther = template_dictionary
+        self.rootLineStruct = template_dictionary 
 
         # rigid TCA
         self.pathCurve = []
@@ -187,8 +190,12 @@ class Hypoid:
         
         return 
     
-    def sampleSurface(self, member, flank, sampling_size = None, extend_tip = False):
-        
+    def sampleSurface(self, member, flank, sampling_size = None, extend_tip = False, updateData = True):
+        """
+        sampling_size = [n_face, n_profile, n_fillet]
+        extend_tip = extend the tip of the blank's face cone boundary (useful for boolean subtractions)
+        updateData = updates Hypoid properties (surface points, enveloping triplets, etc. ). Such data is often used as initial guess for other methods
+        """
         side = self.sideFromMemberAndFlank(member, flank)
         data = self.designData
 
@@ -202,10 +209,22 @@ class Hypoid:
             data[common][f'{subcommon}FACEAPEX'] = data[common][f'{subcommon}FACEAPEX'] + 1
             data[common][f'{subcommon}OUTERCONEDIST'] = data[common][f'{subcommon}OUTERCONEDIST'] + 0.3
             data[common][f'{subcommon}FACEWIDTH'] = data[common][f'{subcommon}FACEWIDTH'] + 0.6
-        
+
         p, n, p_tool, n_tool, csi_theta_phi, z_tool, p_fillet, p_root, n_root, root_variables, p_bounds, nbounds =\
               surface_sampling_casadi(data, member, flank, [nF, nP, nfil], triplet_guess = None, spreadblade = False)
-        return
+        
+        if updateData == True:
+            self.surfPoints[member][flank] = p
+            self.surfNormals[member][flank] = n
+            self.filletPoints[member][flank] = p_fillet
+            self.surfTriplets[member][flank] = csi_theta_phi
+            z = p_fillet[2,:]
+            R = np.sqrt(p_fillet[0,:]**2 + p_fillet[1,:]**2)
+            self.zRfillet[member][flank] = np.r_[z, R]
+            csi_theta_phi = reduce_2d(csi_theta_phi)
+
+        
+        return 
 
     def computeParameters(self):
         return
@@ -283,7 +302,14 @@ def main():
         'thetaf2' : None
     }
     H = Hypoid(SystemData, toothData, coneData)
+
+    H.sampleSurface('gear', 'concave')
+    H.sampleSurface('gear', 'convex')
+    
     H.sampleSurface('pinion', 'concave')
+    H.sampleSurface('pinion', 'convex')
+    
+    
     return
     
 if __name__ == "__main__":

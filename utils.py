@@ -85,7 +85,8 @@ def IPOPT_global_options():
     return options
 
 def reduce_2d(x):
-    return x.reshape(x[0], -1, order = 'F')
+    shp = x.shape
+    return x.reshape(shp[0], -1, order = 'F')
 
 def main():
     tabstring = ''
